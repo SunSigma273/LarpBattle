@@ -5,6 +5,19 @@ const server=http.createServer((req,res)=>{
   const pathname=new URL(req.url,'http://localhost').pathname;
   if(pathname==='/health'){res.writeHead(200,{'content-type':'application/json; charset=utf-8','cache-control':'no-store'});return res.end(JSON.stringify({ok:true,app:'LarpBattle',rooms:rooms.size,indexExists:fs.existsSync(indexPath)}));}
   if(req.method!=='GET'&&req.method!=='HEAD'){res.writeHead(405);return res.end('Method not allowed');}
+  if(pathname.startsWith('/sfx/')){
+    let relative;
+    try{relative=decodeURIComponent(pathname.slice('/sfx/'.length));}catch{res.writeHead(400);return res.end('Bad path');}
+    const sfxRoot=path.resolve(root,'public','sfx');
+    const target=path.resolve(sfxRoot,relative);
+    if(target!==sfxRoot&&!target.startsWith(sfxRoot+path.sep)){res.writeHead(403);return res.end('Forbidden');}
+    if(!fs.existsSync(target)||!fs.statSync(target).isFile()){res.writeHead(404,{'cache-control':'no-store'});return res.end('Sound asset not found');}
+    const ext=path.extname(target).toLowerCase();
+    const types={'.mp3':'audio/mpeg','.wav':'audio/wav','.ogg':'audio/ogg','.json':'application/json; charset=utf-8','.md':'text/markdown; charset=utf-8'};
+    res.writeHead(200,{'content-type':types[ext]||'application/octet-stream','cache-control':ext==='.json'?'no-store':'public, max-age=86400','x-content-type-options':'nosniff'});
+    if(req.method==='HEAD')return res.end();
+    const stream=fs.createReadStream(target);stream.on('error',err=>{console.error('SFX read failed',err);if(!res.headersSent)res.writeHead(500);res.end('Unable to load sound asset');});return stream.pipe(res);
+  }
   if(fs.existsSync(indexPath)){
     res.writeHead(200,{'content-type':'text/html; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff'});
     if(req.method==='HEAD')return res.end();
